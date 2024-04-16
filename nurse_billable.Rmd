@@ -1,0 +1,71 @@
+---
+title: "nurse_billable.Rmd"
+author: "Riya"
+date: "2024-04-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(glue)
+library(odbc)
+library(tidyverse)
+library(DBI)
+library(pool)
+
+conn1 <- dbConnect(odbc(), "OAO Cloud DB SoYoun", timeout = 15)
+
+billing_data <- glue("SELECT * FROM COMBINED_BILLING_DATA")
+
+billing_data_result <- dbGetQuery(conn1,billing_data)
+
+billing_access_drop <- glue("DROP TABLE COMBINED_NURSE_BILLING_ACCESS_DATA")
+billing_access_query <- glue("CREATE TABLE COMBINED_NURSE_BILLING_ACCESS_DATA AS 
+SELECT a.*, 
+  b.DEPARTMENT_ID AS MAIN_DEPARTMENT_ID, 
+  b.DEPARTMENT_NAME AS MAIN_DEPARTMENT_NAME, 
+  b.DEPT_SPECIALTY_NAME, b.LOS_NAME, b.PRC_NAME
+  FROM (SELECT * FROM COMBINED_BILLING_DATA) a 
+  LEFT JOIN (
+    SELECT MRN, 
+    PAT_NAME, 
+    DEPARTMENT_ID, 
+    DEPARTMENT_NAME, 
+    DEPT_SPECIALTY_NAME, 
+    APPT_MADE_DTTM, 
+    APPT_MADE_DATE, 
+    APPT_DTTM, 
+    TRUNC(APPT_DTTM) AS APPT_DATE, 
+    HSP_ACCOUNT_ID, 
+    EXTERNAL_VISIT_ID,
+    LOS_NAME,
+    PRC_NAME
+    FROM MV_DM_PATIENT_ACCESS
+  ) b ON a.PAT_MRN_ID = b.MRN 
+  AND TO_DATE(a.ORG_SERVICE_DATE, 'YYYY-MM-DD') = TO_DATE(b.APPT_DATE, 'YYYY-MM-DD') 
+  AND (a.HSP_ACCOUNT_ID = b.HSP_ACCOUNT_ID OR a.EXTERNAL_VISIT_ID = b.EXTERNAL_VISIT_ID);")
+
+billing_access_index <- glue("CREATE index billing_access_index on COMBINED_NURSE_BILLING_ACCESS_DATA (APPT_DATE, DEPARTMENT_ID)")
+
+## Grouped Table execution
+tryCatch({
+  conn1 <- dbConnect(drv = odbc(), "OAO Cloud DB SoYoun", timeout = 30)
+  dbBegin(conn1)
+  if(dbExistsTable(conn1, "COMBINED_NURSE_BILLING_ACCESS_DATA")){
+    dbExecute(conn1, billing_access_drop) 
+  }
+  dbExecute(conn1, billing_access_query) 
+  dbExecute(conn1, billing_access_index)
+  
+  dbCommit(conn1)
+  dbDisconnect(conn1)
+  print("success")
+  
+},
+error = function(err){
+  print(paste("Error staging:", err$message))
+  dbRollback(conn1)
+  dbDisconnect(conn1)
+})
+
+```
