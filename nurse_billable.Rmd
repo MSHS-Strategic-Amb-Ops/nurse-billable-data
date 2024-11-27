@@ -15,6 +15,55 @@ library(pool)
 
 conn1 <- dbConnect(odbc(), "OAO Cloud DB SoYoun", timeout = 15)
 
+# access_raw_tbl <- tbl(conn1, "MV_DM_PATIENT_ACCESS")
+# 
+# pb_nurse_tbl <- tbl(conn1, "V_PB_BILLABLE_NURSE_VISITS")
+# hb_nurse_tbl <- tbl(conn1, "V_HB_BILLABLE_NURSE_VISITS")
+# combined_billing_tbl <- tbl(conn1, "COMBINED_BILLING_DATA")
+# combined_billing_access_tbl <- tbl(conn1, "COMBINED_NURSE_BILLING_ACCESS_DATA")
+# eagle_data_tbl <- tbl(conn1, "EAGLE_DATA")
+# 
+# 
+# pb_nurse <- pb_nurse_tbl %>% filter(PAT_MRN_ID == "F758917") %>% collect()
+# hb_nurse <- hb_nurse_tbl %>% filter(PAT_MRN_ID == "F758917") %>% collect()
+# eagle_data <- eagle_data_tbl %>% collect()
+# 
+# pb_nurse2 <- pb_nurse_tbl %>% filter(PAT_MRN_ID == "A562139") %>% collect()
+# hb_nurse2 <- hb_nurse_tbl %>% filter(PAT_MRN_ID == "A562139") %>% collect()
+# 
+# 
+# combined_billing <- combined_billing_tbl %>%
+#   filter(PAT_MRN_ID == "F758917") %>%
+#   collect()
+# 
+# access <- access_raw_tbl %>%
+#   filter(MRN == "F758917") %>%
+#   collect()
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# mutate(service_year = year(ORG_SERVICE_DATE),
+#          service_month = month(ORG_SERVICE_DATE)) %>%
+#   group_by(service_year, service_month, TRANSACTION_TYPE) %>%
+#   summarise(total = sum(AMOUNT, na.rm = TRUE)) %>%
+#   collect()
+# 
+# combined_billing_access <- combined_billing_access_tbl %>%
+#   filter(BILLABLE_VS_NONBILLABLE == "Billable") %>%
+#   mutate(service_year = year(ORG_SERVICE_DATE),
+#          service_month = month(ORG_SERVICE_DATE)) %>%
+#   group_by(service_year, service_month, TRANSACTION_TYPE) %>%
+#   summarise(total = sum(AMOUNT, na.rm = TRUE)) %>%
+#   collect() %>%
+#   pivot_wider(names_from = TRANSACTION_TYPE,
+#               values_from = total)
+
 ### Using union to append PB, HB and processed Eagle Data. 
 
 billing_drop <- glue("DROP TABLE COMBINED_BILLING_DATA")
@@ -66,8 +115,9 @@ ORDER BY MV_DM_PATIENT_ACCESS.CONTACT_DATE) a
 LEFT JOIN
 (SELECT * FROM COMBINED_BILLING_DATA) b
 ON a.MRN_ID = b.PAT_MRN_ID 
-AND TO_DATE(a.CONTACT_DATE, 'YYYY-MM-DD') = TO_DATE(b.ORG_SERVICE_DATE, 'YYYY-MM-DD') 
 AND (a.HSP_ACCOUNT_ID = b.HSP_ACCOUNT_ID OR a.EXTERNAL_VISIT_ID = b.EXTERNAL_VISIT_ID);")
+
+## AND TO_DATE(a.CONTACT_DATE, 'YYYY-MM-DD') = TO_DATE(b.ORG_SERVICE_DATE, 'YYYY-MM-DD') Removed from left join above
 
 billing_access_index <- glue("CREATE index billing_access_index on COMBINED_NURSE_BILLING_ACCESS_DATA (CONTACT_DATE, ORG_SERVICE_DATE, DISCHARGE_DATE, POST_DATE, DEPARTMENT_ID)")
 
